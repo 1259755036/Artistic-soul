@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Text to Excel Extractor</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <style>
+    body { padding: 2rem; }
+    .results-table { margin-top: 2rem; }
+    .status-valid { color: #2f855a; font-weight: 600; }
+    .status-needs_review { color: #c05621; font-weight: 600; }
+  </style>
+</head>
+<body>
+  <section class="section">
+    <h1 class="title">Text to Excel Extractor</h1>
+    <form id="parse-form">
+      <div class="field">
+        <label class="label">Paste text</label>
+        <div class="control">
+          <textarea class="textarea" name="text" placeholder="Paste bunker deal text here" rows="6"></textarea>
+        </div>
+      </div>
+      <div class="field">
+        <label class="label">Or upload file</label>
+        <div class="control">
+          <input class="input" type="file" name="file" accept=".txt,.csv,.docx">
+        </div>
+      </div>
+      <div class="field">
+        <label class="checkbox">
+          <input type="checkbox" name="use_llm" value="true">
+          Use AI (DeepSeek) <small class="has-text-grey">LLM is optional. Costs may apply.</small>
+        </label>
+      </div>
+      <div class="field">
+        <div class="control">
+          <button class="button is-link" type="submit">Parse</button>
+        </div>
+      </div>
+    </form>
+
+    <div id="results" class="results-table"></div>
+  </section>
+
+  <script>
+    const form = document.getElementById('parse-form');
+    const resultsEl = document.getElementById('results');
+
+    form.addEventListener('submit', async (event) => {
+      event.preventDefault();
+      const formData = new FormData(form);
+      const response = await fetch('/parse', {
+        method: 'POST',
+        body: formData
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        alert(error.detail || 'Failed to parse text');
+        return;
+      }
+      const data = await response.json();
+      renderResults(data);
+    });
+
+    function renderResults(results) {
+      if (!results.length) {
+        resultsEl.innerHTML = '<p>No records parsed.</p>';
+        return;
+      }
+      let html = '<table class="table is-fullwidth"><thead><tr><th>ID</th><th>Status</th><th>Reasons</th><th>Record</th></tr></thead><tbody>';
+      for (const item of results) {
+        const statusClass = item.status === 'valid' ? 'status-valid' : 'status-needs_review';
+        html += `<tr><td>${item.record_id ?? '-'}</td><td class="${statusClass}">${item.status}</td><td>${item.reasons.join('<br>')}</td><td><pre>${JSON.stringify(item.records[0], null, 2)}</pre></td></tr>`;
+      }
+      html += '</tbody></table>';
+      resultsEl.innerHTML = html;
+    }
+  </script>
+</body>
+</html>

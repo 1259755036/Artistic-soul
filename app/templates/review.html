@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Review Records</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <style>
+    body { padding: 2rem; }
+    .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; }
+  </style>
+</head>
+<body>
+  <section class="section">
+    <div class="level">
+      <div class="level-left">
+        <h1 class="title">Review Records</h1>
+      </div>
+      <div class="level-right">
+        <a class="button" href="/">Back to list</a>
+      </div>
+    </div>
+
+    {% if records %}
+      {% for record in records %}
+        <div class="box">
+          <h2 class="subtitle">Record #{{ record.id }} — <span class="tag is-info">{{ record.status.value }}</span></h2>
+          <div class="review-grid">
+            <div>
+              <h3 class="has-text-weight-semibold">Raw text</h3>
+              <pre>{{ record.raw_text }}</pre>
+            </div>
+            <div>
+              <h3 class="has-text-weight-semibold">Parsed fields</h3>
+              <pre>{{ record.parsed | tojson(indent=2) }}</pre>
+              {% if record.reasons %}
+                <p class="has-text-danger">{{ record.reasons | join(', ') }}</p>
+              {% endif %}
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p>No records yet.</p>
+    {% endif %}
+  </section>
+</body>
+</html>

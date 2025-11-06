@@ -1,0 +1,57 @@
+fields:
+  - name: date
+    type: date
+    required: true
+    patterns: ["\\b\\d{4}-\\d{2}-\\d{2}\\b", "\\b\\d{1,2}[\\s\\-/][A-Za-z]{3}[\\s\\-/]\\d{2,4}\\b"]
+    normalize: ["to_iso_date", "tz=Asia/Singapore"]
+
+  - name: counterparty
+    type: string
+    required: true
+    synonyms_from: "entities/counterparties.yml"
+
+  - name: vessel
+    type: string
+    required: false
+
+  - name: product
+    type: enum
+    required: true
+    synonyms_from: "entities/products.yml"
+
+  - name: qty_mt
+    type: number
+    required: true
+    patterns: ["(\\d+(?:\\.\\d+)?)\\s?(?:MT|T|tons?)"]
+    normalize: ["to_float", "unit=MT"]
+
+  - name: price
+    type: number
+    required: false
+    patterns: ["\\b\\d+(?:\\.\\d+)?\\b"]
+    normalize: ["to_float"]
+
+  - name: currency
+    type: enum
+    required: false
+    allowed: ["USD","SGD","EUR","CNY"]
+    default: "USD"
+
+  - name: port
+    type: string
+    required: false
+    synonyms_from: "entities/ports.yml"
+
+  - name: incoterm
+    type: enum
+    required: false
+    allowed: ["FOB","CIF","DAP","EXW"]
+
+  - name: remarks
+    type: string
+    required: false
+
+  - name: source
+    type: enum
+    required: false
+    allowed: ["email","whatsapp","manual","csv"]

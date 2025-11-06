@@ -1,0 +1,18 @@
+TASK: Extract the following fields strictly according to this JSON schema (types & enums included).
+Rules:
+1) Output ONLY minified JSON, no comments, no extra text.
+2) If a field is unknown, output null (do NOT hallucinate).
+3) Dates → ISO YYYY-MM-DD; quantities → float in MT; currency → ISO code; product → enum from mapping.
+4) Return an array if the text contains multiple records.
+
+Schema:
+{{json_schema}}
+
+Examples:
+Input:
+"13 Oct 2025, Trafigura sold 500 MT VLSFO @ 545 USD/MT Singapore. Notes: urgent."
+Output:
+[{"date":"2025-10-13","counterparty":"Trafigura","vessel":null,"product":"VLSFO","qty_mt":500.0,"price":545.0,"currency":"USD","port":"Singapore","incoterm":null,"remarks":"urgent","source":null}]
+
+TEXT:
+{{text}}
