@@ -1,0 +1,22 @@
+TASK: Extract the following fields strictly according to this JSON schema (types & enums included).
+Rules:
+1) Output ONLY minified JSON, no comments, no extra text.
+2) If a field is unknown, output null (do NOT hallucinate).
+3) Dates -> ISO YYYY-MM-DD; Asia/Singapore timezone. Quantities -> float in MT. Currency -> ISO code. Product -> enum via mapping.
+4) If the text contains MULTIPLE products or price pairs like "377/729", split into multiple records and map the first price to the first product, the second price to the second product, etc.
+5) Convert "1.5K" to 1500; "DON +8.5" -> premium_usd_mt: 8.5.
+6) Map status keywords: SOLD->SOLD, DONE->DONE, "(pre norm)"->PRENOM.
+7) Return an ARRAY of records.
+
+Schema:
+{{json_schema}}
+
+Examples:
+Input:
+"MOUNT LOGAN / 21-25 NOV / HSFO 800-1000 / LSMGO 50-100 / AGENT SEAWAVE / DONE 377/729+1.5K if below 100mts - EPS"
+Output:
+[{"vessel":"MOUNT LOGAN","product":"HSFO380","qty_min_mt":800,"qty_max_mt":1000,"price_usd_mt":377.0,"barging_fee_usd":1500.0,"buyer":"EPS","agent":"SEAWAVE","eta_start":"2025-11-21","eta_end":"2025-11-25","port":"Singapore","status":"DONE","remarks":"if below 100mts"},
+ {"vessel":"MOUNT LOGAN","product":"LSMGO","qty_min_mt":50,"qty_max_mt":100,"price_usd_mt":729.0,"barging_fee_usd":1500.0,"buyer":"EPS","agent":"SEAWAVE","eta_start":"2025-11-21","eta_end":"2025-11-25","port":"Singapore","status":"DONE","remarks":"if below 100mts"}]
+
+TEXT:
+{{text}}

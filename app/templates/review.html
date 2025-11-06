@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Review Records</title>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bulma@0.9.4/css/bulma.min.css">
+  <style>
+    body { padding: 2rem; }
+    .review-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 1.5rem; }
+    pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; white-space: pre-wrap; }
+    .status-badge { display: inline-flex; align-items: center; padding: 0.25rem 0.75rem; border-radius: 999px; font-size: 0.75rem; text-transform: uppercase; }
+    .status-badge.approved { background: #48c7741a; color: #2f855a; border: 1px solid #48c774; }
+    .status-badge.needs_review { background: #ffdd571a; color: #c05621; border: 1px solid #ffdd57; }
+    .status-badge.valid { background: #209cee1a; color: #0366d6; border: 1px solid #209cee; }
+  </style>
+</head>
+<body>
+  <section class="section">
+    <div class="level">
+      <div class="level-left">
+        <h1 class="title">Review Records</h1>
+      </div>
+      <div class="level-right">
+        <a class="button" href="/">Back to list</a>
+      </div>
+    </div>
+
+    {% if records %}
+      {% for record in records %}
+        <div class="box" data-rec="{{ record.id }}">
+          <div class="level">
+            <div class="level-left">
+              <h2 class="subtitle">Record #{{ record.id }}</h2>
+            </div>
+            <div class="level-right">
+              <span class="status-badge {{ record.status.value }}">{{ record.status.value }}</span>
+            </div>
+          </div>
+          <div class="review-grid">
+            <div>
+              <h3 class="has-text-weight-semibold">Raw text</h3>
+              <pre class="raw-text" data-raw="{{ record.id }}">{{ record.raw_text }}</pre>
+              {% if record.reasons %}
+                <p class="has-text-danger mt-2">{{ record.reasons | join(', ') }}</p>
+              {% endif %}
+            </div>
+            <div>
+              <h3 class="has-text-weight-semibold">Parsed fields</h3>
+              {% for field in fields %}
+                {% set value = record.parsed.get(field.name) %}
+                <div class="field">
+                  <label class="label">{{ field.name }}</label>
+                  <div class="control">
+                    {% if field.type == 'enum' and field.allowed %}
+                      <div class="select is-fullwidth">
+                        <select data-field="{{ field.name }}">
+                          <option value=""></option>
+                          {% for option in field.allowed %}
+                            <option value="{{ option }}" {% if value == option %}selected{% endif %}>{{ option }}</option>
+                          {% endfor %}
+                        </select>
+                      </div>
+                    {% else %}
+                      <input class="input" type="text" value="{{ value if value is not none else '' }}" data-field="{{ field.name }}">
+                    {% endif %}
+                  </div>
+                </div>
+              {% endfor %}
+              <div class="buttons">
+                <button class="button is-warning" type="button" onclick="saveRecord({{ record.id }}, false)">Save</button>
+                <button class="button is-success" type="button" onclick="saveRecord({{ record.id }}, true)">Approve</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      {% endfor %}
+    {% else %}
+      <p>No records yet.</p>
+    {% endif %}
+  </section>
+
+  <script>
+    async function saveRecord(id, approve=false){
+      const scope = document.querySelector(`[data-rec="${id}"]`);
+      if(!scope){
+        alert('Record container not found');
+        return;
+      }
+      const parsed = {};
+      scope.querySelectorAll('[data-field]').forEach(el => {
+        parsed[el.dataset.field] = el.value ? el.value : null;
+      });
+      const body = { parsed, status: approve ? 'approved' : 'needs_review' };
+      const response = await fetch(`/review/${id}`, {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)});
+      if(!response.ok){
+        const error = await response.json().catch(() => ({}));
+        alert(error.detail || 'Save failed');
+        return;
+      }
+      window.location.reload();
+    }
+
+    function escapeRegExp(string){
+      return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    }
+
+    document.querySelectorAll('.box').forEach(box => {
+      const pre = box.querySelector('.raw-text');
+      if(!pre){
+        return;
+      }
+      let text = pre.textContent;
+      const inputs = box.querySelectorAll('[data-field]');
+      inputs.forEach(input => {
+        if(!input.value){
+          return;
+        }
+        const pattern = new RegExp(escapeRegExp(input.value), 'i');
+        text = text.replace(pattern, match => `<mark>${match}</mark>`);
+      });
+      pre.innerHTML = text.replace(/\n/g, '<br>');
+    });
+  </script>
+</body>
+</html>
