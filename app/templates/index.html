@@ -7,18 +7,31 @@
   <style>
     body { padding: 2rem; }
     .results-table { margin-top: 2rem; }
-    .status-valid { color: #2f855a; font-weight: 600; }
-    .status-needs_review { color: #c05621; font-weight: 600; }
+    .badge { display: inline-flex; align-items: center; border-radius: 999px; padding: 0.25rem 0.75rem; font-size: 0.75rem; text-transform: uppercase; }
+    .badge-valid { background: #48c7741a; color: #2f855a; border: 1px solid #48c774; }
+    .badge-review { background: #ffdd571a; color: #c05621; border: 1px solid #ffdd57; }
+    .action-chips { margin-top: 1rem; display: flex; gap: 0.5rem; flex-wrap: wrap; }
+    pre { background: #f5f5f5; padding: 1rem; border-radius: 6px; }
   </style>
 </head>
 <body>
   <section class="section">
-    <h1 class="title">Text to Excel Extractor</h1>
+    <div class="level">
+      <div class="level-left">
+        <h1 class="title">Text to Excel Extractor</h1>
+      </div>
+      <div class="level-right action-chips">
+        <a class="button is-light" href="/review">Send to Review</a>
+        <a class="button is-link" href="/export.xlsx">Export Approved</a>
+        <button class="button is-info" type="button" id="reload-config">Reload config</button>
+      </div>
+    </div>
+
     <form id="parse-form">
       <div class="field">
         <label class="label">Paste text</label>
         <div class="control">
-          <textarea class="textarea" name="text" placeholder="Paste bunker deal text here" rows="6"></textarea>
+          <textarea class="textarea" name="text" placeholder="Paste bunker chat text here" rows="6"></textarea>
         </div>
       </div>
       <div class="field">
@@ -46,6 +59,17 @@
   <script>
     const form = document.getElementById('parse-form');
     const resultsEl = document.getElementById('results');
+    const reloadBtn = document.getElementById('reload-config');
+
+    reloadBtn.addEventListener('click', async () => {
+      const response = await fetch('/api/reload-config', { method: 'POST' });
+      if (response.ok) {
+        const data = await response.json();
+        alert(data.reloaded ? 'Configuration reloaded.' : 'Configuration already up-to-date.');
+      } else {
+        alert('Failed to reload configuration');
+      }
+    });
 
     form.addEventListener('submit', async (event) => {
       event.preventDefault();
@@ -55,7 +79,7 @@
         body: formData
       });
       if (!response.ok) {
-        const error = await response.json();
+        const error = await response.json().catch(() => ({ detail: 'Failed to parse text' }));
         alert(error.detail || 'Failed to parse text');
         return;
       }
@@ -63,18 +87,63 @@
       renderResults(data);
     });
 
+    function statusBadge(status) {
+      if (status === 'valid') {
+        return '<span class="badge badge-valid">VALID</span>';
+      }
+      if (status === 'approved') {
+        return '<span class="badge badge-valid">APPROVED</span>';
+      }
+      return '<span class="badge badge-review">REVIEW</span>';
+    }
+
     function renderResults(results) {
       if (!results.length) {
         resultsEl.innerHTML = '<p>No records parsed.</p>';
         return;
       }
-      let html = '<table class="table is-fullwidth"><thead><tr><th>ID</th><th>Status</th><th>Reasons</th><th>Record</th></tr></thead><tbody>';
+      let html = '<table class="table is-fullwidth"><thead><tr><th>ID</th><th>Status</th><th>Reasons</th><th>Record</th><th>Actions</th></tr></thead><tbody>';
       for (const item of results) {
-        const statusClass = item.status === 'valid' ? 'status-valid' : 'status-needs_review';
-        html += `<tr><td>${item.record_id ?? '-'}</td><td class="${statusClass}">${item.status}</td><td>${item.reasons.join('<br>')}</td><td><pre>${JSON.stringify(item.records[0], null, 2)}</pre></td></tr>`;
+        const record = item.records[0] || {};
+        const recordId = item.record_id || '-';
+        const reasons = item.reasons.length ? item.reasons.join('<br>') : '';
+        const recordJson = JSON.stringify(record, null, 2);
+        html += `<tr>
+          <td>${recordId}</td>
+          <td>${statusBadge(item.status)}</td>
+          <td>${reasons}</td>
+          <td><pre>${recordJson}</pre></td>
+          <td>
+            ${recordId !== '-' ? `<button class="button is-small" data-action="approve" data-id="${recordId}" data-record='${encodeURIComponent(JSON.stringify(record))}'>Approve</button>
+            <button class="button is-small is-warning" data-action="review" data-id="${recordId}" data-record='${encodeURIComponent(JSON.stringify(record))}'>Send to Review</button>` : ''}
+          </td>
+        </tr>`;
       }
       html += '</tbody></table>';
       resultsEl.innerHTML = html;
+      attachActionHandlers();
+    }
+
+    function attachActionHandlers() {
+      resultsEl.querySelectorAll('button[data-action]').forEach((btn) => {
+        btn.addEventListener('click', async (event) => {
+          const button = event.currentTarget;
+          const recordId = button.dataset.id;
+          const parsed = JSON.parse(decodeURIComponent(button.dataset.record));
+          const action = button.dataset.action === 'approve' ? 'approved' : 'needs_review';
+          const response = await fetch(`/review/${recordId}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ parsed, status: action })
+          });
+          if (!response.ok) {
+            alert('Update failed');
+            return;
+          }
+          const updated = await response.json();
+          alert(`Record ${updated.id} updated to ${updated.status}`);
+        });
+      });
     }
   </script>
 </body>

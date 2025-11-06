@@ -4,8 +4,8 @@ Convert messy, semi-structured trade text into structured tables ready for Excel
 
 ## Features
 
-- YAML-driven field definitions, patterns, enums, and synonym dictionaries
-- FastAPI backend with optional DeepSeek LLM enrichment
+- YAML-driven field definitions, patterns, enums, and synonym dictionaries (e.g., `message_ts`, `product`, `qty_min_mt`, `status`)
+- FastAPI backend with optional DeepSeek LLM enrichment and strict/lenient validation modes
 - SQLite persistence with review workflow and duplicate detection
 - Excel export (pandas + openpyxl) with ordered columns, formatting, and frozen headers
 - Web UI for paste/upload, review dashboard, and hot-reloadable config
@@ -35,7 +35,9 @@ Field definitions live in `config/fields.yaml`. Each field can specify:
 - `default`: default value when missing
 - `synonyms_from`: relative path to a YAML synonyms dictionary
 
-Synonym dictionaries live in `config/entities/`. For example `config/entities/products.yml` maps canonical product names to synonyms such as `"VLSFO"` ← `"0.5%"`.
+Synonym dictionaries live in `config/entities/`. For example `config/entities/products.yml` maps canonical product names to synonyms such as `"HSFO380"` ← `"HSFO"`, and `config/entities/counterparties.yml` covers buyers, suppliers, brokers, and agents.
+
+Status values are enumerated in config and include `OFFER`, `DONE`, `SOLD`, `ENQUIRY`, `PRENOM`, and `UNKNOWN`.
 
 Reload configuration without restarting via:
 
@@ -52,7 +54,9 @@ The rules engine runs first; if `use_llm=true` the system calls the DeepSeek API
 - `DS_MODEL` (default `deepseek-chat`)
 - `DS_COMPAT` (default `openai`, for compatible gateways)
 
-Toggle the LLM from the UI or via `POST /parse` with `{"use_llm": true}`.
+Toggle the LLM from the UI or via `POST /parse?use_llm=true`. A `strict=true` query parameter rejects invalid payloads instead of queueing them for review.
+
+LLM payloads are sent with `temperature=0`, `top_p=0`, and `max_tokens=512` to control cost. Only fields still missing after rules are sent for enrichment, and every response is revalidated with Pydantic plus business validation before persisting.
 
 All LLM output is revalidated with Pydantic and business rules before persisting.
 
@@ -65,7 +69,7 @@ All LLM output is revalidated with Pydantic and business rules before persisting
 
 ## Excel export
 
-`GET /export.xlsx` downloads approved (or filtered) records as `export_YYYYMMDD_HHMM.xlsx`.
+`GET /export.xlsx` downloads approved records as `export_YYYYMMDD_HHMM.xlsx`.
 
 Export details:
 
@@ -80,6 +84,8 @@ Run pytest from the repo root:
 ```bash
 pytest
 ```
+
+CSV, TXT, and (optionally) DOCX uploads are accepted by `/parse`. Install `python-docx` if DOCX ingestion is required.
 
 ## Deployment
 

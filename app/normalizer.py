@@ -3,70 +3,92 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
+from dateutil import parser as date_parser
+from dateutil import tz
+
 from .config_loader import config_loader
 
-
-DATE_FORMATS = [
-    "%Y-%m-%d",
-    "%d %b %Y",
-    "%d %b %y",
-    "%d %B %Y",
-    "%d %B %y",
-    "%d-%b-%Y",
-    "%d-%b-%y",
-    "%d/%b/%Y",
-    "%d/%m/%Y",
-    "%m/%d/%Y",
-]
+SG_TZ = tz.gettz("Asia/Singapore")
 
 
-def _normalize_date(value: Any, instructions: List[str]) -> Optional[str]:
+def _normalize_date(value: Any) -> Optional[str]:
     if value in (None, ""):
         return None
-    text = str(value).strip()
-    text = text.replace("/", " ").replace("-", " ").replace(",", " ")
-    text = " ".join(text.split())
-    for fmt in DATE_FORMATS:
+    if isinstance(value, datetime):
+        dt = value
+    else:
         try:
-            dt = datetime.strptime(text, fmt)
-            return dt.date().isoformat()
-        except ValueError:
-            continue
-    # fallback for formats like 12 Oct 2025 (with month abbreviation) already handled
-    return None
+            dt = date_parser.parse(str(value))
+        except (ValueError, TypeError):
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=SG_TZ)
+    dt = dt.astimezone(SG_TZ)
+    return dt.date().isoformat()
 
 
-def _normalize_float(value: Any) -> Optional[float]:
+def _normalize_number(value: Any) -> Optional[float]:
     if value in (None, ""):
         return None
+    if isinstance(value, (int, float)):
+        return float(value)
+    text = str(value).strip().replace(",", "")
+    multiplier = 1.0
+    if text.lower().endswith("k"):
+        multiplier = 1000.0
+        text = text[:-1]
+    if text.lower().endswith("m"):
+        multiplier = 1_000_000.0
+        text = text[:-1]
     try:
-        if isinstance(value, (int, float)):
-            return float(value)
-        cleaned = str(value).replace(",", "").strip()
-        return float(cleaned)
+        return float(text) * multiplier
     except ValueError:
         return None
 
 
+def _normalize_enum(value: Any, allowed: Optional[List[str]]) -> Optional[str]:
+    if value in (None, ""):
+        return None
+    text = str(value).strip()
+    if allowed:
+        for option in allowed:
+            if text.lower() == option.lower():
+                return option
+    return text.upper()
+
+
+def _apply_synonym(field_name: str, value: Optional[str]) -> Optional[str]:
+    if value in (None, ""):
+        return None
+    synonyms = config_loader.get_synonyms().get(field_name, {})
+    mapped = synonyms.get(str(value).lower())
+    if mapped:
+        return mapped
+    return str(value).strip()
+
+
 def normalize_record(record: Dict[str, Any]) -> Dict[str, Any]:
-    field_defs = config_loader.get_field_definitions()
     normalized: Dict[str, Any] = {}
+    for field_def in config_loader.get_field_definitions():
+        raw_value = record.get(field_def.name)
+        value: Any
+        if field_def.type == "date":
+            value = _normalize_date(raw_value)
+        elif field_def.type == "number":
+            value = _normalize_number(raw_value)
+        elif field_def.type == "enum":
+            value = _normalize_enum(raw_value, field_def.allowed)
+        else:
+            value = raw_value.strip() if isinstance(raw_value, str) else raw_value
 
-    for field_def in field_defs:
-        value = record.get(field_def.name)
-        instructions = field_def.normalize or []
+        if isinstance(value, str):
+            value = value.strip() or None
 
-        if field_def.type == "date" and any(inst.startswith("to_iso_date") for inst in instructions):
-            normalized[field_def.name] = _normalize_date(value, instructions)
-            continue
+        if field_def.synonyms_from and isinstance(value, str):
+            value = _apply_synonym(field_def.name, value)
 
-        if field_def.type == "number" and any(inst.startswith("to_float") for inst in instructions):
-            normalized[field_def.name] = _normalize_float(value)
-            continue
-
-        if field_def.name == "currency" and isinstance(value, str):
-            normalized[field_def.name] = value.upper()
-            continue
+        if value is None and field_def.default is not None:
+            value = field_def.default
 
         normalized[field_def.name] = value
 

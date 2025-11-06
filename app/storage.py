@@ -8,6 +8,8 @@ from typing import Any, Dict, List, Optional
 
 from .schemas import RecordStatus
 
+DEDUP_KEY_FIELDS = ("vessel", "product", "eta_start", "buyer", "price_usd_mt")
+
 DB_PATH = Path(__file__).resolve().parent.parent / "data" / "records.db"
 
 _lock = threading.RLock()
@@ -53,7 +55,19 @@ def init_db() -> None:
 
 
 def compute_hash(record: Dict[str, Any]) -> str:
-    fingerprint = json.dumps(record, sort_keys=True)
+    key_parts = []
+    for field in DEDUP_KEY_FIELDS:
+        value = record.get(field)
+        if value is None:
+            key_parts.append("")
+        elif isinstance(value, float):
+            key_parts.append(f"{value:.4f}")
+        else:
+            key_parts.append(str(value).strip().upper())
+    if any(part for part in key_parts):
+        fingerprint = "|".join(key_parts)
+    else:
+        fingerprint = json.dumps(record, sort_keys=True)
     return sha256(fingerprint.encode("utf-8")).hexdigest()
 
 
